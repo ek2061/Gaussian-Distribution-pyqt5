@@ -153,6 +153,7 @@ class AppWindow(QMainWindow):
         
     
     def pushButton_3_Click(self):
+        #n是所有值，bins是刻度        
         n1 = self.coin_dict['n1']
         n2 = self.coin_dict['n2']
         bins1 = self.coin_dict['bins1']
@@ -167,7 +168,7 @@ class AppWindow(QMainWindow):
         n2_list = n2.tolist()
         n2_max_index = n2_list.index(max(n2))
         
-        ans = np.ceil((bins1[n1_max_index] + bins2[n2_max_index])/2)
+        ans = np.round((bins1[n1_max_index] + bins2[n2_max_index])/2, 1)
         
         self.mpl.axes.axvline(x = ans, linewidth = 3, color = 'brown')
         self.mpl.axes.text(ans+2, max(n1), str(ans))
@@ -210,9 +211,6 @@ class AppWindow(QMainWindow):
             self.mpl.axes.text(new_center2 + 2, max(n1), str(np.round(new_center2, 1)))
             self.mpl.axes.text(mid + 2, max(n1), str(np.round(mid, 1))) 
             self.mpl.draw()
-        
-        
-        
         
         
 app = QCoreApplication.instance()
