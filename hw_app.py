@@ -82,10 +82,10 @@ class AppWindow(QMainWindow):
             self.close_mpl()
             
             rounds1 = self.ui.spinBox.value()
-            times1 = self.ui.spinBox_3.value()
+            times = self.ui.spinBox_3.value()
             threshold1 = self.ui.doubleSpinBox.value()
             
-            toss_coin1 = np.random.rand(rounds1, times1)  #丟第一個硬幣
+            toss_coin1 = np.random.rand(rounds1, times)  #丟第一個硬幣
             toss_coin1[toss_coin1 >= threshold1] = 1
             toss_coin1[toss_coin1 < threshold1] = 0   #小於閥值就是反面
             
@@ -94,41 +94,47 @@ class AppWindow(QMainWindow):
             toss_coin1 = np.sum(toss_coin1, 1)
             
             rounds2 = self.ui.spinBox_2.value()
-            times2 = self.ui.spinBox_3.value()
             threshold2 = self.ui.doubleSpinBox_2.value()
             
-            toss_coin2 = np.random.rand(rounds2, times2)
+            toss_coin2 = np.random.rand(rounds2, times)
             toss_coin2[toss_coin2 >= threshold2] = 1
             toss_coin2[toss_coin2 <  threshold2] = 0
             
             toss_coin2 = 1 - toss_coin2
             
             toss_coin2 = np.sum(toss_coin2, 1)
-
+                        
+            toss_coin1_bincount = np.bincount(toss_coin1.tolist())
+            toss_coin2_bincount = np.bincount(toss_coin2.tolist())
+            
+            toss_coin1_count, toss_coin2_count = self.appendzeros(toss_coin1_bincount, toss_coin2_bincount)
+            
+            
+            
             #####以下畫直方圖
             
             n1, bins1, patches = self.mpl.axes.hist(toss_coin1, bins = 50, edgecolor = 'black')
             mu = toss_coin1.mean()
             sigma = toss_coin1.std()
-            y1 = stats.norm.pdf(range(times1 + 1), mu, sigma)
+            y1 = stats.norm.pdf(range(times + 1), mu, sigma)
             max_n1 = np.max(n1)
             max_y1 = np.max(y1)
             factor = max_n1/max_y1
-            self.mpl.axes.plot(range(times1 + 1), y1*factor, 'm--', color = 'green', linewidth = 3)
+            self.mpl.axes.plot(range(times + 1), y1*factor, 'm--', color = 'green', linewidth = 3)
                       
             n2, bins2, patches = self.mpl.axes.hist(toss_coin2, bins = 50, edgecolor = 'black')
             mu = toss_coin2.mean()
             sigma = toss_coin2.std()
-            y2 = stats.norm.pdf(range(times2 + 1), mu, sigma)
+            y2 = stats.norm.pdf(range(times + 1), mu, sigma)
             max_n2 = np.max(n2)
             max_y2 = np.max(y2)
             factor = max_n2/max_y2  #放大倍數
-            self.mpl.axes.plot(range(times2 + 1), y2*factor, 'm--', color = 'red', linewidth = 3)
+            self.mpl.axes.plot(range(times + 1), y2*factor, 'm--', color = 'red', linewidth = 3)
            
             self.mpl.axes.legend(('Coin1', 'Coin2'), fontsize = 12)
                                    
             self.coin_dict = dict()
-            self.coin_dict['times'] = times1
+            self.coin_dict['times'] = times
             self.coin_dict['n1'] = n1
             self.coin_dict['bins1'] = bins1
             self.coin_dict['n2'] = n2
@@ -138,8 +144,20 @@ class AppWindow(QMainWindow):
             self.coin_dict['y1'] = y1
             self.coin_dict['y2'] = y2
             self.coin_dict['factor'] = factor
+            self.coin_dict['toss_coin1_count'] = toss_coin1_count
+            self.coin_dict['toss_coin2_count'] = toss_coin2_count
             
             self.mpl.draw()
+    
+    def appendzeros(self, bincount1, bincount2):
+        appendlen = np.abs(len(bincount1) - len(bincount2))
+        if appendlen > 0:
+            appendarr = np.zeros(appendlen)
+            if len(bincount1) > len(bincount2):
+                bincount2 = np.hstack((bincount2, appendarr))
+            else:
+                bincount1 = np.hstack((bincount1, appendarr))
+        return bincount1, bincount2
     
     def replot_now(self):  #因為刷新都會把畫布清空，所以我重畫原本的直方圖
         toss_coin1 = self.coin_dict['toss_coin1']
@@ -156,9 +174,15 @@ class AppWindow(QMainWindow):
         self.mpl.axes.plot(range(times + 1), y2*factor, 'm--', color = 'red', linewidth = 3)
         
     def calc_classification_rate(self, toss_coin1, toss_coin2, divide_value):  #傳入2顆硬幣的所有次數, 分割值, times
-        toss_coin1_copy = toss_coin1.copy()
-        toss_coin2_copy = toss_coin2.copy()
-        
+        #左邊固定Coin1, 右邊固定Coin2
+        if toss_coin1.min() <= toss_coin2.min():
+            toss_coin1_copy = toss_coin1.copy()
+            toss_coin2_copy = toss_coin2.copy()
+        else:
+            toss_coin1_copy = toss_coin2.copy()
+            toss_coin2_copy = toss_coin1.copy()
+            
+        #計算線左邊是Coin1的有幾個(tp)，線右邊是Coin2的有幾個(tn)
         toss_coin1_copy[toss_coin1 <= divide_value] = 1
         toss_coin1_copy[toss_coin1 > divide_value] = 0
         toss_coin2_copy[toss_coin2 < divide_value] = 0
@@ -179,32 +203,42 @@ class AppWindow(QMainWindow):
         
         
     def pushButton_3_Click(self):
-        #n是高度，bins是刻度        
         toss_coin1 = self.coin_dict['toss_coin1']
         toss_coin2 = self.coin_dict['toss_coin2']
+                
+        times = self.coin_dict['times']
         
-        n1 = self.coin_dict['n1']
-        n2 = self.coin_dict['n2']
-        bins1 = self.coin_dict['bins1']
-        bins2 = self.coin_dict['bins2']
+        toss_coin1_count = self.coin_dict['toss_coin1_count']
+        toss_coin2_count = self.coin_dict['toss_coin2_count']
+        
+        #貝氏分類
+        current = 'None'  #當前最高硬幣
+        for i in range(times + 1):
+            if toss_coin1_count[i] == 0 and toss_coin2_count[i] == 0:  #都是0就不要做
+                continue
+            elif current == 'Coin1' and toss_coin1_count[i] < toss_coin2_count[i]:  #如果剛剛是Coin1最高，現在變成Coin2最高
+                ans = i  #貝氏分類的解答
+                break
+            elif current == 'Coin2' and toss_coin1_count[i] >= toss_coin2_count[i]:  #如果剛剛是Coin2最高，現在變成Coin1最高
+                ans = i  #貝氏分類的解答
+                break
+            elif toss_coin1_count[i] >= toss_coin2_count[i]:  #Coin1最高
+                current = 'Coin1'
+            elif toss_coin1_count[i] < toss_coin2_count[i]:  #Coin2最高
+                current = 'Coin2'       
+        
+        #畫貝氏分類線
+        textheight = max(toss_coin1_count.max(), toss_coin2_count.max())  #文字的高度選柱子最高點
         
         self.close_mpl()
         self.replot_now()
         
-        n1_list = n1.tolist()
-        n1_max_index = n1_list.index(max(n1))  #柱子最高值
-        
-        n2_list = n2.tolist()
-        n2_max_index = n2_list.index(max(n2))
-        
-        ans = np.round((bins1[n1_max_index] + bins2[n2_max_index])/2, 1)
-        
         self.mpl.axes.axvline(x = ans, linewidth = 3, color = 'brown')
-        self.mpl.axes.text(ans+2, max(n1), str(ans))
+        self.mpl.axes.text(ans+2, textheight, str(ans))
         
         self.mpl.draw()
-        
-        
+               
+        #算分類率
         tp, fn, tn, fp, tpr, fpr, acc, auc = self.calc_classification_rate(toss_coin1, toss_coin2, ans)
         
         print('\ntp:%d\nfn:%d\ntn:%d\nfp:%d\ntpr:%f\nfpr:%f\nacc:%f\nauc:%f\n' %(tp, fn, tn, fp, tpr, fpr, acc, auc))
