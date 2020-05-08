@@ -19,9 +19,9 @@ from matplotlib.figure import Figure
 import matplotlib.mlab as mlab
 import scipy.stats as stats
 from random import choice
-import time
 from PyQt5.Qt import QThreadPool
 from call_k_means import Run_k_means
+from sklearn import metrics
 
 class MyFigure(FigureCanvas):
     def __init__(self,parent=None,width = 5, height = 4, dpi = 100):
@@ -40,8 +40,10 @@ class AppWindow(QMainWindow):
         self.ui.setupUi(self)
         
         self.mpl = MyFigure(self,width = 4, height = 5, dpi = 100)
+        self.fig_roc = MyFigure(self,width = 4, height = 5, dpi = 100)
         
         self.ui.verticalLayout.addWidget(self.mpl)
+        self.ui.verticalLayout_2.addWidget(self.fig_roc)
         
         self.ui.pushButton.clicked.connect(self.pushButton_Click)  #隨機參數
         self.ui.pushButton_2.clicked.connect(self.pushButton_2_Click)  #畫圖
@@ -52,7 +54,9 @@ class AppWindow(QMainWindow):
     
     def close_mpl(self):
         self.mpl.axes.clear()
-#        self.mpl.close()
+    
+    def close_fig_roc(self):
+        self.fig_roc.axes.clear()
     
     def pushButton_Click(self):
         random_rounds = np.random.randint(1, 10000)
@@ -151,14 +155,39 @@ class AppWindow(QMainWindow):
         self.mpl.axes.plot(range(times + 1), y1*factor, 'm--', color = 'green', linewidth = 3)
         self.mpl.axes.plot(range(times + 1), y2*factor, 'm--', color = 'red', linewidth = 3)
         
-    
+    def calc_classification_rate(self, toss_coin1, toss_coin2, divide_value):  #傳入2顆硬幣的所有次數, 分割值, times
+        toss_coin1_copy = toss_coin1.copy()
+        toss_coin2_copy = toss_coin2.copy()
+        
+        toss_coin1_copy[toss_coin1 <= divide_value] = 1
+        toss_coin1_copy[toss_coin1 > divide_value] = 0
+        toss_coin2_copy[toss_coin2 < divide_value] = 0
+        toss_coin2_copy[toss_coin2 >= divide_value] = 1  
+        
+        tp = np.sum(toss_coin1_copy)
+        fn = len(toss_coin1_copy) - tp
+        tn = np.sum(toss_coin2_copy)
+        fp = len(toss_coin2_copy) - tn
+        
+        tpr = tp/(tp + fn)
+        fpr = fp/(fp + tn)
+        
+        acc = (tp + tn) / (tp + fn + tn + fp)
+        auc = metrics.auc([0, fpr, 1], [0, tpr, 1])
+        
+        return tp, fn, tn, fp, tpr, fpr, acc, auc
+        
+        
     def pushButton_3_Click(self):
-        #n是所有值，bins是刻度        
+        #n是高度，bins是刻度        
+        toss_coin1 = self.coin_dict['toss_coin1']
+        toss_coin2 = self.coin_dict['toss_coin2']
+        
         n1 = self.coin_dict['n1']
         n2 = self.coin_dict['n2']
         bins1 = self.coin_dict['bins1']
         bins2 = self.coin_dict['bins2']
-                
+        
         self.close_mpl()
         self.replot_now()
         
@@ -174,6 +203,27 @@ class AppWindow(QMainWindow):
         self.mpl.axes.text(ans+2, max(n1), str(ans))
         
         self.mpl.draw()
+        
+        
+        tp, fn, tn, fp, tpr, fpr, acc, auc = self.calc_classification_rate(toss_coin1, toss_coin2, ans)
+        
+        print('\ntp:%d\nfn:%d\ntn:%d\nfp:%d\ntpr:%f\nfpr:%f\nacc:%f\nauc:%f\n' %(tp, fn, tn, fp, tpr, fpr, acc, auc))
+         
+        self.close_fig_roc()
+        self.fig_roc.axes.plot([0, fpr, 1], [0, tpr, 1], color = 'blue')
+        self.fig_roc.axes.fill_between([0, fpr, 1], [0, tpr, 1], color = 'Fuchsia', alpha=0.2)
+        self.fig_roc.axes.plot(fpr, tpr, '.', color = 'red')
+        self.fig_roc.axes.plot([0, 1], [0, 1], color = 'green', linestyle = '--')
+        self.fig_roc.draw()
+        
+        self.ui.label_6.setText('TP:%d' %(tp))
+        self.ui.label_7.setText('FN:%d' %(fn))
+        self.ui.label_8.setText('TN:%d' %(tn))
+        self.ui.label_9.setText('FP:%d' %(fp))
+        self.ui.label_10.setText('TPR:%.3f' %(tpr))
+        self.ui.label_11.setText('FPR:%.3f' %(fpr))
+        self.ui.label_12.setText('ACC:%.3f' %(acc))
+        self.ui.label_13.setText('AUC:%.3f' %(auc))
         
     def pushButton_4_Click(self):
         self.close_mpl()
@@ -211,7 +261,6 @@ class AppWindow(QMainWindow):
             self.mpl.axes.text(new_center2 + 2, max(n1), str(np.round(new_center2, 1)))
             self.mpl.axes.text(mid + 2, max(n1), str(np.round(mid, 1))) 
             self.mpl.draw()
-        
         
 app = QCoreApplication.instance()
 if app is None:
