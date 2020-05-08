@@ -47,7 +47,7 @@ class AppWindow(QMainWindow):
         
         self.ui.pushButton.clicked.connect(self.pushButton_Click)  #隨機參數
         self.ui.pushButton_2.clicked.connect(self.pushButton_2_Click)  #畫圖
-        self.ui.pushButton_3.clicked.connect(self.pushButton_3_Click)  #Bays
+        self.ui.pushButton_3.clicked.connect(self.pushButton_3_Click)  #Bayes
         self.ui.pushButton_4.clicked.connect(self.pushButton_4_Click)  #K-means
               
         self.show()
@@ -58,7 +58,7 @@ class AppWindow(QMainWindow):
     def close_fig_roc(self):
         self.fig_roc.axes.clear()
     
-    def pushButton_Click(self):
+    def pushButton_Click(self):  #random數據
         random_rounds = np.random.randint(1, 10000)
         random_rounds2 = np.random.randint(1, 10000)
         random_times = np.random.randint(1, 1000)        
@@ -71,7 +71,7 @@ class AppWindow(QMainWindow):
         self.ui.doubleSpinBox.setValue(random_threshold / 1000.0)
         self.ui.doubleSpinBox_2.setValue(random_threshold2 / 1000.0)
         
-    def pushButton_2_Click(self):
+    def pushButton_2_Click(self):  #畫直方圖和存資料
         if self.ui.spinBox.value() == 0 \
         or self.ui.spinBox_2.value() == 0 \
         or self.ui.spinBox_3.value() == 0 \
@@ -103,42 +103,37 @@ class AppWindow(QMainWindow):
             toss_coin2 = 1 - toss_coin2
             
             toss_coin2 = np.sum(toss_coin2, 1)
+            
+            #統計硬幣在不同次數的回合數並補0到times的長度
+            toss_coin1_count = self.appendzeros(np.bincount(toss_coin1.tolist()), times)
+            toss_coin2_count = self.appendzeros(np.bincount(toss_coin2.tolist()), times)
                         
-            toss_coin1_bincount = np.bincount(toss_coin1.tolist())
-            toss_coin2_bincount = np.bincount(toss_coin2.tolist())
+            #畫直方圖
+            self.mpl.axes.bar(range(times + 1), toss_coin1_count, label = 'Coin1', edgecolor = 'black', alpha=.5)
+            self.mpl.axes.bar(range(times + 1), toss_coin2_count, label = 'Coin2', edgecolor = 'black', alpha=.5)
             
-            toss_coin1_count, toss_coin2_count = self.appendzeros(toss_coin1_bincount, toss_coin2_bincount)
-            
-            
-            
-            #####以下畫直方圖
-            
-            n1, bins1, patches = self.mpl.axes.hist(toss_coin1, bins = 50, edgecolor = 'black')
+            #畫擬合曲線
             mu = toss_coin1.mean()
             sigma = toss_coin1.std()
             y1 = stats.norm.pdf(range(times + 1), mu, sigma)
-            max_n1 = np.max(n1)
-            max_y1 = np.max(y1)
-            factor = max_n1/max_y1
-            self.mpl.axes.plot(range(times + 1), y1*factor, 'm--', color = 'green', linewidth = 3)
-                      
-            n2, bins2, patches = self.mpl.axes.hist(toss_coin2, bins = 50, edgecolor = 'black')
+            max_n = np.max(toss_coin1_count)
+            max_y = np.max(y1)
+            factor = max_n/max_y
+            self.mpl.axes.plot(range(times + 1), y1*factor, 'm--', color = 'green', linewidth = 2)
+            
             mu = toss_coin2.mean()
             sigma = toss_coin2.std()
             y2 = stats.norm.pdf(range(times + 1), mu, sigma)
-            max_n2 = np.max(n2)
-            max_y2 = np.max(y2)
-            factor = max_n2/max_y2  #放大倍數
-            self.mpl.axes.plot(range(times + 1), y2*factor, 'm--', color = 'red', linewidth = 3)
-           
-            self.mpl.axes.legend(('Coin1', 'Coin2'), fontsize = 12)
-                                   
+            max_n = np.max(toss_coin2_count)
+            max_y = np.max(y2)
+            factor = max_n/max_y
+            self.mpl.axes.plot(range(times + 1), y2*factor, 'm--', color = 'red', linewidth = 2)
+            self.mpl.axes.legend()
+            self.mpl.draw()
+            
+            #存資料
             self.coin_dict = dict()
             self.coin_dict['times'] = times
-            self.coin_dict['n1'] = n1
-            self.coin_dict['bins1'] = bins1
-            self.coin_dict['n2'] = n2
-            self.coin_dict['bins2'] = bins2
             self.coin_dict['toss_coin1'] = toss_coin1
             self.coin_dict['toss_coin2'] = toss_coin2
             self.coin_dict['y1'] = y1
@@ -146,32 +141,29 @@ class AppWindow(QMainWindow):
             self.coin_dict['factor'] = factor
             self.coin_dict['toss_coin1_count'] = toss_coin1_count
             self.coin_dict['toss_coin2_count'] = toss_coin2_count
-            
-            self.mpl.draw()
     
-    def appendzeros(self, bincount1, bincount2):
-        appendlen = np.abs(len(bincount1) - len(bincount2))
+    def appendzeros(self, bincount, times):  #補0到times+1的長度
+        appendlen = times - len(bincount) + 1  #看要補幾格0
         if appendlen > 0:
             appendarr = np.zeros(appendlen)
-            if len(bincount1) > len(bincount2):
-                bincount2 = np.hstack((bincount2, appendarr))
-            else:
-                bincount1 = np.hstack((bincount1, appendarr))
-        return bincount1, bincount2
+            bincount = np.hstack((bincount, appendarr))           
+        return bincount
     
     def replot_now(self):  #因為刷新都會把畫布清空，所以我重畫原本的直方圖
-        toss_coin1 = self.coin_dict['toss_coin1']
-        toss_coin2 = self.coin_dict['toss_coin2']
+        times = self.coin_dict['times']
         y1 = self.coin_dict['y1']
         y2 = self.coin_dict['y2']
-        factor = self.coin_dict['factor']
-        times = self.coin_dict['times']
+        factor = self.coin_dict['factor'] 
+        toss_coin1_count = self.coin_dict['toss_coin1_count']
+        toss_coin2_count = self.coin_dict['toss_coin2_count']
         
-        n, bins, patches = self.mpl.axes.hist(toss_coin1, bins = 50, edgecolor = 'black')
-        n, bins, patches = self.mpl.axes.hist(toss_coin2, bins = 50, edgecolor = 'black')
+        #畫直方圖
+        self.mpl.axes.bar(range(times + 1), toss_coin1_count, label = 'Coin1', edgecolor = 'black', alpha=.5)
+        self.mpl.axes.bar(range(times + 1), toss_coin2_count, label = 'Coin2', edgecolor = 'black', alpha=.5)
         
-        self.mpl.axes.plot(range(times + 1), y1*factor, 'm--', color = 'green', linewidth = 3)
-        self.mpl.axes.plot(range(times + 1), y2*factor, 'm--', color = 'red', linewidth = 3)
+        #畫擬合曲線
+        self.mpl.axes.plot(range(times + 1), y1*factor, 'm--', color = 'green', linewidth = 2)       
+        self.mpl.axes.plot(range(times + 1), y2*factor, 'm--', color = 'red', linewidth = 2)
         
     def calc_classification_rate(self, toss_coin1, toss_coin2, divide_value):  #傳入2顆硬幣的所有次數, 分割值, times
         #左邊固定Coin1, 右邊固定Coin2
@@ -227,20 +219,19 @@ class AppWindow(QMainWindow):
             elif toss_coin1_count[i] < toss_coin2_count[i]:  #Coin2最高
                 current = 'Coin2'       
         
-        #畫貝氏分類線
+        #畫分類線
         textheight = max(toss_coin1_count.max(), toss_coin2_count.max())  #文字的高度選柱子最高點
         
         self.close_mpl()
         self.replot_now()
         
-        self.mpl.axes.axvline(x = ans, linewidth = 3, color = 'brown')
+        self.mpl.axes.axvline(x = ans, linewidth = 2, color = 'brown')
         self.mpl.axes.text(ans+2, textheight, str(ans))
         
         self.mpl.draw()
                
         #算分類率
-        tp, fn, tn, fp, tpr, fpr, acc, auc = self.calc_classification_rate(toss_coin1, toss_coin2, ans)
-        
+        tp, fn, tn, fp, tpr, fpr, acc, auc = self.calc_classification_rate(toss_coin1, toss_coin2, ans)       
         print('\ntp:%d\nfn:%d\ntn:%d\nfp:%d\ntpr:%f\nfpr:%f\nacc:%f\nauc:%f\n' %(tp, fn, tn, fp, tpr, fpr, acc, auc))
          
         self.close_fig_roc()
@@ -250,14 +241,14 @@ class AppWindow(QMainWindow):
         self.fig_roc.axes.plot([0, 1], [0, 1], color = 'green', linestyle = '--')
         self.fig_roc.draw()
         
-        self.ui.label_6.setText('TP:%d' %(tp))
-        self.ui.label_7.setText('FN:%d' %(fn))
-        self.ui.label_8.setText('TN:%d' %(tn))
-        self.ui.label_9.setText('FP:%d' %(fp))
-        self.ui.label_10.setText('TPR:%.3f' %(tpr))
-        self.ui.label_11.setText('FPR:%.3f' %(fpr))
-        self.ui.label_12.setText('ACC:%.3f' %(acc))
-        self.ui.label_13.setText('AUC:%.3f' %(auc))
+        self.ui.label_6.setText('TP: %d' %(tp))
+        self.ui.label_7.setText('FN: %d' %(fn))
+        self.ui.label_8.setText('TN: %d' %(tn))
+        self.ui.label_9.setText('FP: %d' %(fp))
+        self.ui.label_10.setText('TPR: %.3f' %(tpr))
+        self.ui.label_11.setText('FPR: %.3f' %(fpr))
+        self.ui.label_12.setText('ACC: %.3f' %(acc))
+        self.ui.label_13.setText('AUC: %.3f' %(auc))
         
     def pushButton_4_Click(self):
         self.close_mpl()
@@ -273,27 +264,30 @@ class AppWindow(QMainWindow):
             k2 = choice(D)
             
         do_k_means = Run_k_means(D, k1, k2)  #把 D, k1, k2 傳入多線程
-        do_k_means.res.callback_signal.connect(self.show_k_means_result)  #結果連接後續func
+        do_k_means.res.callback_signal.connect(self.show_k_means_result)  #回傳值連接func後續處理
         QThreadPool.globalInstance().start(do_k_means)  #執行多線程
             
     def show_k_means_result(self, msg, new_center1, new_center2):
-        n1 = self.coin_dict['n1']
         if msg == 'error':
             QMessageBox.about(self, '執行錯誤')
         else:
+            toss_coin1_count = self.coin_dict['toss_coin1_count']
+            toss_coin2_count = self.coin_dict['toss_coin2_count']
+        
             print(msg)
             self.close_mpl()
             self.replot_now()
             
             mid = (new_center1 + new_center2)/2
             
-            self.mpl.axes.axvline(x = new_center1, linewidth = 3, color = 'black')
-            self.mpl.axes.axvline(x = new_center2, linewidth = 3, color = 'black')
-            self.mpl.axes.axvline(x = mid, linewidth = 3, color = 'brown', linestyle="--")
-            
-            self.mpl.axes.text(new_center1 + 2, max(n1), str(np.round(new_center1, 1)))
-            self.mpl.axes.text(new_center2 + 2, max(n1), str(np.round(new_center2, 1)))
-            self.mpl.axes.text(mid + 2, max(n1), str(np.round(mid, 1))) 
+            self.mpl.axes.axvline(x = new_center1, linewidth = 2, color = 'black')
+            self.mpl.axes.axvline(x = new_center2, linewidth = 2, color = 'black')
+            self.mpl.axes.axvline(x = mid, linewidth = 2, color = 'brown', linestyle = "--")
+                      
+            textheight = max(toss_coin1_count.max(), toss_coin2_count.max())  #文字的高度選柱子最高點
+            self.mpl.axes.text(new_center1 + 2, textheight, str(np.round(new_center1, 1)))
+            self.mpl.axes.text(new_center2 + 2, textheight, str(np.round(new_center2, 1)))
+            self.mpl.axes.text(mid + 2, textheight, str(np.round(mid, 1))) 
             self.mpl.draw()
         
 app = QCoreApplication.instance()

@@ -236,7 +236,7 @@ class Ui_MainWindow(object):
         self.label_2.setText(_translate("MainWindow", "Rounds_2(N)"))
         self.pushButton.setText(_translate("MainWindow", "Random"))
         self.pushButton_2.setText(_translate("MainWindow", "Plot"))
-        self.pushButton_3.setText(_translate("MainWindow", "Bays"))
+        self.pushButton_3.setText(_translate("MainWindow", "Bayes"))
         self.pushButton_4.setText(_translate("MainWindow", "K-means"))
         self.label_6.setText(_translate("MainWindow", "TP:"))
         self.label_7.setText(_translate("MainWindow", "FN:"))
