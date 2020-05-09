@@ -49,8 +49,18 @@ class AppWindow(QMainWindow):
         self.ui.pushButton_2.clicked.connect(self.pushButton_2_Click)  #畫圖
         self.ui.pushButton_3.clicked.connect(self.pushButton_3_Click)  #Bayes
         self.ui.pushButton_4.clicked.connect(self.pushButton_4_Click)  #K-means
+        self.ui.checkBox.stateChanged.connect(self.checkBoxChangedAction)  #是否使用第3顆硬幣
+        
+        self.coin_dict = dict()
+        self.coin_dict['toss_coin3'] = np.zeros(101)
+        self.coin_dict['toss_coin3_count'] = np.zeros(101)
               
         self.show()
+        
+    def checkBoxChangedAction(self):  #是否使用第3顆硬幣
+        if self.ui.checkBox.isChecked() == False:
+            self.coin_dict['toss_coin3'] = np.zeros(101)
+            self.coin_dict['toss_coin3_count'] = np.zeros(101)
     
     def close_mpl(self):
         self.mpl.axes.clear()
@@ -67,14 +77,39 @@ class AppWindow(QMainWindow):
         
         self.ui.spinBox.setValue(random_rounds)
         self.ui.spinBox_2.setValue(random_rounds2)
-        self.ui.spinBox_3.setValue(random_times)
+        self.ui.spinBox_4.setValue(random_times)
         self.ui.doubleSpinBox.setValue(random_threshold / 1000.0)
         self.ui.doubleSpinBox_2.setValue(random_threshold2 / 1000.0)
         
-    def pushButton_2_Click(self):  #畫直方圖和存資料
+        if self.ui.checkBox.isChecked():
+            random_rounds3 = np.random.randint(1, 10000)
+            random_threshold3 = np.random.randint(300, 800)
+            
+            self.ui.spinBox_3.setValue(random_rounds3)
+            self.ui.doubleSpinBox_3.setValue(random_threshold3 / 1000.0)
+    
+    def throw_coin(self, rounds, times, threshold):  #丟硬幣
+        toss_coin = np.random.rand(rounds, times)
+        toss_coin[toss_coin >= threshold] = 1
+        toss_coin[toss_coin < threshold] = 0   #小於閥值就是反面
+        
+        toss_coin = 1 - toss_coin        
+        toss_coin = np.sum(toss_coin, 1)
+        return toss_coin        
+    
+    def calc_fitting_curve(self, toss_coin, toss_coin_count, times):  #計算擬合曲線
+        mu = toss_coin.mean()
+        sigma = toss_coin.std()
+        y = stats.norm.pdf(range(times + 1), mu, sigma)
+        max_n = np.max(toss_coin_count)
+        max_y = np.max(y)
+        factor = max_n/max_y
+        return y, factor
+        
+    def pushButton_2_Click(self):  #畫直方圖和擬合曲線
         if self.ui.spinBox.value() == 0 \
         or self.ui.spinBox_2.value() == 0 \
-        or self.ui.spinBox_3.value() == 0 \
+        or self.ui.spinBox_4.value() == 0 \
         or self.ui.doubleSpinBox.value() == 0\
         or self.ui.doubleSpinBox_2.value() == 0:
             QMessageBox.about(self, 'Error', 'input parameter plz')
@@ -82,27 +117,14 @@ class AppWindow(QMainWindow):
             self.close_mpl()
             
             rounds1 = self.ui.spinBox.value()
-            times = self.ui.spinBox_3.value()
-            threshold1 = self.ui.doubleSpinBox.value()
-            
-            toss_coin1 = np.random.rand(rounds1, times)  #丟第一個硬幣
-            toss_coin1[toss_coin1 >= threshold1] = 1
-            toss_coin1[toss_coin1 < threshold1] = 0   #小於閥值就是反面
-            
-            toss_coin1 = 1 - toss_coin1
-            
-            toss_coin1 = np.sum(toss_coin1, 1)
-            
             rounds2 = self.ui.spinBox_2.value()
+            times = self.ui.spinBox_4.value()
+            threshold1 = self.ui.doubleSpinBox.value()
             threshold2 = self.ui.doubleSpinBox_2.value()
             
-            toss_coin2 = np.random.rand(rounds2, times)
-            toss_coin2[toss_coin2 >= threshold2] = 1
-            toss_coin2[toss_coin2 <  threshold2] = 0
-            
-            toss_coin2 = 1 - toss_coin2
-            
-            toss_coin2 = np.sum(toss_coin2, 1)
+            #丟硬幣
+            toss_coin1 = self.throw_coin(rounds1, times, threshold1)
+            toss_coin2 = self.throw_coin(rounds2, times, threshold2)
             
             #統計硬幣在不同次數的回合數並補0到times的長度
             toss_coin1_count = self.appendzeros(np.bincount(toss_coin1.tolist()), times)
@@ -113,21 +135,12 @@ class AppWindow(QMainWindow):
             self.mpl.axes.bar(range(times + 1), toss_coin2_count, label = 'Coin2', edgecolor = 'black', alpha=.5)
             
             #畫擬合曲線
-            mu = toss_coin1.mean()
-            sigma = toss_coin1.std()
-            y1 = stats.norm.pdf(range(times + 1), mu, sigma)
-            max_n = np.max(toss_coin1_count)
-            max_y = np.max(y1)
-            factor = max_n/max_y
-            self.mpl.axes.plot(range(times + 1), y1*factor, 'm--', color = 'green', linewidth = 2)
+            y1, factor1 = self.calc_fitting_curve(toss_coin1, toss_coin1_count, times)
+            y2, factor2 = self.calc_fitting_curve(toss_coin2, toss_coin2_count, times)
             
-            mu = toss_coin2.mean()
-            sigma = toss_coin2.std()
-            y2 = stats.norm.pdf(range(times + 1), mu, sigma)
-            max_n = np.max(toss_coin2_count)
-            max_y = np.max(y2)
-            factor = max_n/max_y
-            self.mpl.axes.plot(range(times + 1), y2*factor, 'm--', color = 'red', linewidth = 2)
+            self.mpl.axes.plot(range(times + 1), y1*factor1, 'm--', color = 'green', linewidth = 2)
+            self.mpl.axes.plot(range(times + 1), y2*factor2, 'm--', color = 'red', linewidth = 2)
+            
             self.mpl.axes.legend()
             self.mpl.draw()
             
@@ -138,11 +151,47 @@ class AppWindow(QMainWindow):
             self.coin_dict['toss_coin2'] = toss_coin2
             self.coin_dict['y1'] = y1
             self.coin_dict['y2'] = y2
-            self.coin_dict['factor'] = factor
+            self.coin_dict['factor1'] = factor1
+            self.coin_dict['factor2'] = factor2
             self.coin_dict['toss_coin1_count'] = toss_coin1_count
             self.coin_dict['toss_coin2_count'] = toss_coin2_count
+            
+            #存0陣列避免拿不出資料
+            self.coin_dict['toss_coin3'] = np.zeros(101)
+            self.coin_dict['toss_coin3_count'] = np.zeros(101)
+            
+            if self.ui.checkBox.isChecked():  #如果勾使用第3個硬幣
+                if self.ui.spinBox_3.value() == 0 or self.ui.doubleSpinBox_3.value() == 0:
+                    QMessageBox.about(self, 'Error', 'input parameter plz')            
+                else:
+                    rounds3 = self.ui.spinBox_3.value()
+                    times = self.ui.spinBox_4.value()
+                    threshold3 = self.ui.doubleSpinBox_3.value()
+                    
+                    #丟硬幣
+                    toss_coin3 = self.throw_coin(rounds3, times, threshold3)
+                    
+                    #統計硬幣在不同次數的回合數並補0到times的長度
+                    toss_coin3_count = self.appendzeros(np.bincount(toss_coin3.tolist()), times)
+                    
+                    #畫直方圖
+                    self.mpl.axes.bar(range(times + 1), toss_coin3_count, label = 'Coin3', edgecolor = 'black', alpha=.5)
+                    
+                    #畫擬合曲線
+                    y3, factor3 = self.calc_fitting_curve(toss_coin3, toss_coin3_count, times)
+                    
+                    self.mpl.axes.plot(range(times + 1), y3*factor3, 'm--', color = 'blue', linewidth = 2)
+                    
+                    self.mpl.axes.legend()
+                    self.mpl.draw()
+                    
+                    #存資料
+                    self.coin_dict['toss_coin3'] = toss_coin3
+                    self.coin_dict['y3'] = y3
+                    self.coin_dict['factor3'] = factor3
+                    self.coin_dict['toss_coin3_count'] = toss_coin3_count
     
-    def appendzeros(self, bincount, times):  #補0到times+1的長度
+    def appendzeros(self, bincount, times):  #補0到補到 times+1 的長度
         appendlen = times - len(bincount) + 1  #看要補幾格0
         if appendlen > 0:
             appendarr = np.zeros(appendlen)
@@ -153,7 +202,8 @@ class AppWindow(QMainWindow):
         times = self.coin_dict['times']
         y1 = self.coin_dict['y1']
         y2 = self.coin_dict['y2']
-        factor = self.coin_dict['factor'] 
+        factor1 = self.coin_dict['factor1']
+        factor2 = self.coin_dict['factor2'] 
         toss_coin1_count = self.coin_dict['toss_coin1_count']
         toss_coin2_count = self.coin_dict['toss_coin2_count']
         
@@ -162,11 +212,36 @@ class AppWindow(QMainWindow):
         self.mpl.axes.bar(range(times + 1), toss_coin2_count, label = 'Coin2', edgecolor = 'black', alpha=.5)
         
         #畫擬合曲線
-        self.mpl.axes.plot(range(times + 1), y1*factor, 'm--', color = 'green', linewidth = 2)       
-        self.mpl.axes.plot(range(times + 1), y2*factor, 'm--', color = 'red', linewidth = 2)
+        self.mpl.axes.plot(range(times + 1), y1*factor1, 'm--', color = 'green', linewidth = 2)       
+        self.mpl.axes.plot(range(times + 1), y2*factor2, 'm--', color = 'red', linewidth = 2)
         
-    def calc_classification_rate(self, toss_coin1, toss_coin2, divide_value):  #傳入2顆硬幣的所有次數, 分割值, times
-        #左邊固定Coin1, 右邊固定Coin2
+        self.mpl.axes.legend()
+        self.mpl.draw()
+        
+    def find_Bayes_line(self, toss_coin1_count, toss_coin2_count, times):  #找貝氏分類線
+        #toss_coin1_count是第一顆硬幣丟0~100次正面分別有幾個回合的array
+        last_coin = 'None'  #前一次最高硬幣
+        current_coin = 'None'  #當前最高硬幣
+        
+        for i in range(times + 1):
+            last_coin = current_coin  #跑新一輪就儲存上一輪的最高硬幣
+            if toss_coin1_count[i] == 0 and toss_coin2_count[i] == 0:  #都是0就不要做
+                continue
+            elif toss_coin1_count[i] >= toss_coin2_count[i]:  #如果 Coin1 在 times = i 時比 Coin2 高
+                current_coin = 'Coin1'
+            elif toss_coin1_count[i] < toss_coin2_count[i]:  #如果 Coin2 在 times = i 時比 Coin1 高
+                current_coin = 'Coin2'
+            
+            if last_coin != current_coin and last_coin != 'None':
+                ans = i  #貝氏分類的解答
+                break
+        return ans    
+    
+    def calc_classification_rate(self, toss_coin1, toss_coin2, divide_value):
+        #Coin1固定在左邊，Coin2固定在左邊
+        #toss_coin1_count是第一顆硬幣丟0~100次正面分別有幾個回合的array
+        #divide_value是分割線的值
+        
         if toss_coin1.min() <= toss_coin2.min():
             toss_coin1_copy = toss_coin1.copy()
             toss_coin2_copy = toss_coin2.copy()
@@ -175,10 +250,10 @@ class AppWindow(QMainWindow):
             toss_coin2_copy = toss_coin1.copy()
             
         #計算線左邊是Coin1的有幾個(tp)，線右邊是Coin2的有幾個(tn)
-        toss_coin1_copy[toss_coin1 <= divide_value] = 1
-        toss_coin1_copy[toss_coin1 > divide_value] = 0
-        toss_coin2_copy[toss_coin2 < divide_value] = 0
-        toss_coin2_copy[toss_coin2 >= divide_value] = 1  
+        toss_coin1_copy[toss_coin1_copy <= divide_value] = 1
+        toss_coin1_copy[toss_coin1_copy > divide_value] = 0
+        toss_coin2_copy[toss_coin2_copy < divide_value] = 0
+        toss_coin2_copy[toss_coin2_copy >= divide_value] = 1  
         
         tp = np.sum(toss_coin1_copy)
         fn = len(toss_coin1_copy) - tp
@@ -191,64 +266,106 @@ class AppWindow(QMainWindow):
         acc = (tp + tn) / (tp + fn + tn + fp)
         auc = metrics.auc([0, fpr, 1], [0, tpr, 1])
         
-        return tp, fn, tn, fp, tpr, fpr, acc, auc
-        
-        
-    def pushButton_3_Click(self):
+        return tp, fn, tn, fp, tpr, fpr, acc, auc   
+               
+    def pushButton_3_Click(self):  #貝氏分類器
         toss_coin1 = self.coin_dict['toss_coin1']
         toss_coin2 = self.coin_dict['toss_coin2']
                 
         times = self.coin_dict['times']
         
         toss_coin1_count = self.coin_dict['toss_coin1_count']
-        toss_coin2_count = self.coin_dict['toss_coin2_count']
+        toss_coin2_count = self.coin_dict['toss_coin2_count']        
         
-        #貝氏分類
-        current = 'None'  #當前最高硬幣
-        for i in range(times + 1):
-            if toss_coin1_count[i] == 0 and toss_coin2_count[i] == 0:  #都是0就不要做
-                continue
-            elif current == 'Coin1' and toss_coin1_count[i] < toss_coin2_count[i]:  #如果剛剛是Coin1最高，現在變成Coin2最高
-                ans = i  #貝氏分類的解答
-                break
-            elif current == 'Coin2' and toss_coin1_count[i] >= toss_coin2_count[i]:  #如果剛剛是Coin2最高，現在變成Coin1最高
-                ans = i  #貝氏分類的解答
-                break
-            elif toss_coin1_count[i] >= toss_coin2_count[i]:  #Coin1最高
-                current = 'Coin1'
-            elif toss_coin1_count[i] < toss_coin2_count[i]:  #Coin2最高
-                current = 'Coin2'       
-        
-        #畫分類線
-        textheight = max(toss_coin1_count.max(), toss_coin2_count.max())  #文字的高度選柱子最高點
-        
-        self.close_mpl()
-        self.replot_now()
-        
-        self.mpl.axes.axvline(x = ans, linewidth = 2, color = 'brown')
-        self.mpl.axes.text(ans+2, textheight, str(ans))
-        
-        self.mpl.draw()
-               
-        #算分類率
-        tp, fn, tn, fp, tpr, fpr, acc, auc = self.calc_classification_rate(toss_coin1, toss_coin2, ans)       
-        print('\ntp:%d\nfn:%d\ntn:%d\nfp:%d\ntpr:%f\nfpr:%f\nacc:%f\nauc:%f\n' %(tp, fn, tn, fp, tpr, fpr, acc, auc))
-         
-        self.close_fig_roc()
-        self.fig_roc.axes.plot([0, fpr, 1], [0, tpr, 1], color = 'blue')
-        self.fig_roc.axes.fill_between([0, fpr, 1], [0, tpr, 1], color = 'Fuchsia', alpha=0.2)
-        self.fig_roc.axes.plot(fpr, tpr, '.', color = 'red')
-        self.fig_roc.axes.plot([0, 1], [0, 1], color = 'green', linestyle = '--')
-        self.fig_roc.draw()
-        
-        self.ui.label_6.setText('TP: %d' %(tp))
-        self.ui.label_7.setText('FN: %d' %(fn))
-        self.ui.label_8.setText('TN: %d' %(tn))
-        self.ui.label_9.setText('FP: %d' %(fp))
-        self.ui.label_10.setText('TPR: %.3f' %(tpr))
-        self.ui.label_11.setText('FPR: %.3f' %(fpr))
-        self.ui.label_12.setText('ACC: %.3f' %(acc))
-        self.ui.label_13.setText('AUC: %.3f' %(auc))
+        if self.ui.checkBox.isChecked() == False:  #如果沒有勾使用第3個硬幣
+            #貝氏分類
+            ans = self.find_Bayes_line(toss_coin1_count, toss_coin2_count, times)
+            
+            #畫分類線
+            textheight = max(toss_coin1_count.max(), toss_coin2_count.max())  #文字的高度選柱子最高點
+            
+            self.close_mpl()
+            self.replot_now()
+            
+            self.mpl.axes.axvline(x = ans, linewidth = 2, color = 'brown')
+            self.mpl.axes.text(ans+2, textheight, str(ans))
+            
+            self.mpl.draw()
+                 
+            #算分類率
+            tp, fn, tn, fp, tpr, fpr, acc, auc = self.calc_classification_rate(toss_coin1, toss_coin2, ans)       
+#            print('\ntp:%d\nfn:%d\ntn:%d\nfp:%d\ntpr:%f\nfpr:%f\nacc:%f\nauc:%f\n' %(tp, fn, tn, fp, tpr, fpr, acc, auc))
+             
+            self.close_fig_roc()
+            self.fig_roc.axes.plot([0, fpr, 1], [0, tpr, 1], color = 'green')
+            self.fig_roc.axes.fill_between([0, fpr, 1], [0, tpr, 1], color = 'GreenYellow', alpha=0.5)
+            self.fig_roc.axes.plot(fpr, tpr, '.', color = 'darkgreen')
+            self.fig_roc.axes.plot([0, 1], [0, 1], color = 'blue', linestyle = '--')
+            
+                        
+            #左P 右N
+            self.ui.label_8.setText('TP: %d' %(tp))
+            self.ui.label_9.setText('FN: %d' %(fn))
+            self.ui.label_10.setText('TN: %d' %(tn))
+            self.ui.label_11.setText('FP: %d' %(fp))
+            self.ui.label_12.setText('TPR: %.3f' %(tpr))
+            self.ui.label_13.setText('FPR: %.3f' %(fpr))
+            self.ui.label_14.setText('ACC: %.3f' %(acc))
+            self.ui.label_15.setText('AUC: %.3f' %(auc))
+            
+            #左N 右P
+            tpr = tn/(tn + fp)
+            fpr = fp/(fn + tp)
+            auc = metrics.auc([0, fpr, 1], [0, tpr, 1])
+            
+            self.fig_roc.axes.plot([0, fpr, 1], [0, tpr, 1], color = 'red')
+            self.fig_roc.axes.fill_between([0, fpr, 1], [0, tpr, 1], color = 'Fuchsia', alpha=0.3)
+            self.fig_roc.axes.plot(fpr, tpr, '.', color = 'darkred')
+            
+            self.fig_roc.draw()
+                       
+            self.ui.label_16.setText('TP: %d' %(tn))
+            self.ui.label_17.setText('FN: %d' %(fp))
+            self.ui.label_18.setText('TN: %d' %(tp))
+            self.ui.label_19.setText('FP: %d' %(fn))
+            self.ui.label_20.setText('TPR: %.3f' %(tpr))
+            self.ui.label_21.setText('FPR: %.3f' %(fpr))
+            self.ui.label_22.setText('ACC: %.3f' %(acc))
+            self.ui.label_23.setText('AUC: %.3f' %(auc))           
+        else:  #有勾使用第3顆硬幣
+            try:                
+                toss_coin3 = self.coin_dict['toss_coin3']
+                toss_coin3_count = self.coin_dict['toss_coin3_count']
+                
+                if np.sum(toss_coin3) == 0 or np.sum(toss_coin3_count) == 0:  #根本沒有第3顆硬幣的資料
+                    QMessageBox.about(self, 'エラー', 'コイン3のデータがありません、Plotで新規作成してください。')
+                else:
+                    toss_coin1_min = toss_coin1.min()  #Coin1直方圖最左邊的值
+                    toss_coin2_min = toss_coin2.min()
+                    toss_coin3_min = toss_coin3.min()
+                    
+                    min_ls = []
+                    min_ls.append(toss_coin1_min)
+                    min_ls.append(toss_coin2_min)
+                    min_ls.append(toss_coin3_min)
+                    
+                    #看這3顆硬幣的順序，誰在最左邊
+                    sorted_min_ls = sorted(range(len(min_ls)), key = lambda k : min_ls[k])  #索引
+                    
+                    textheight = max(toss_coin1_count.max(), toss_coin2_count.max(), toss_coin3_count.max())  #文字的高度選柱子最高點
+                    
+                    for i in range(2):
+                        #貝氏分類
+                        ans = eval('self.find_Bayes_line(toss_coin'+ str(sorted_min_ls[i] + 1) +'_count, toss_coin' + str(sorted_min_ls[i + 1]+1) +'_count, times)')
+                        
+                        #畫分類線
+                        self.mpl.axes.axvline(x = ans, linewidth = 2, color = 'brown')
+                        self.mpl.axes.text(ans+2, textheight, str(ans))
+                        
+                    self.mpl.draw()
+                
+            except Exception as e:
+                print('貝氏分類 Coin3 錯誤')
         
     def pushButton_4_Click(self):
         self.close_mpl()

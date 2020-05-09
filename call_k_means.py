@@ -40,6 +40,9 @@ class Run_k_means(QRunnable):
 
     def run(self):
         try:
+            self.res.callback_signal.emit('doing', self.k1, self.k2)
+            time.sleep(1)
+            
             new_center1, new_center2 = self.k_means(self.D, self.k1, self.k2)  
             
             while(new_center1 != self.k1 or new_center2 != self.k2):  #新中心和舊中心都相同才能停下來
