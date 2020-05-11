@@ -114,6 +114,28 @@ class AppWindow(QMainWindow):
         or self.ui.doubleSpinBox_2.value() == 0:
             QMessageBox.about(self, 'Error', 'input parameter plz')
         else:
+            #清空上一次的結果
+            self.ui.label_8.setText('TP:')
+            self.ui.label_9.setText('FN:')
+            self.ui.label_10.setText('TN:')
+            self.ui.label_11.setText('FP:')
+            self.ui.label_12.setText('TPR:')
+            self.ui.label_13.setText('FPR:')
+            self.ui.label_14.setText('ACC:')
+            self.ui.label_15.setText('AUC:')
+            
+            self.ui.label_16.setText('TP:')
+            self.ui.label_17.setText('FN:')
+            self.ui.label_18.setText('TN:')
+            self.ui.label_19.setText('FP:')
+            self.ui.label_20.setText('TPR:')
+            self.ui.label_21.setText('FPR:')
+            self.ui.label_22.setText('ACC:')
+            self.ui.label_23.setText('AUC:')
+            
+            self.close_fig_roc()
+            self.fig_roc.draw()          
+            
             self.close_mpl()
             
             rounds1 = self.ui.spinBox.value()
@@ -331,7 +353,7 @@ class AppWindow(QMainWindow):
             self.ui.label_20.setText('TPR: %.3f' %(tpr))
             self.ui.label_21.setText('FPR: %.3f' %(fpr))
             self.ui.label_22.setText('ACC: %.3f' %(acc))
-            self.ui.label_23.setText('AUC: %.3f' %(auc))           
+            self.ui.label_23.setText('AUC: %.3f' %(auc))
         else:  #有勾使用第3顆硬幣
             try:                
                 toss_coin3 = self.coin_dict['toss_coin3']
